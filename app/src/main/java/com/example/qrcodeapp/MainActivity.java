@@ -56,11 +56,80 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
         initViews();
         setupClickListeners();
+        // TEST BD
+        AppDatabase db = AppDatabase.getInstance(this);
+        ElementDao elementDao = db.elementDao();
+        MediaDao mediaDao = db.mediaDao();
+
+        if (elementDao.getAllElements().isEmpty()) {
+            android.util.Log.d("DB_TEST", "База пуста.");
+
+            Element gold = new Element();
+            gold.symbol = "Au";
+            gold.NameRu = "Золото";
+            gold.NameEn = "gold";
+            elementDao.insert(gold);
+
+            Element oxygen = new Element();
+            oxygen.symbol = "O";
+            oxygen.NameRu = "Кислород";
+            oxygen.NameEn = "oxygen";
+            elementDao.insert(oxygen);
+
+            // 2. полчение id элементов
+            Element savedGold = elementDao.getElementByEnglishName("gold");
+            Element savedOxygen = elementDao.getElementByEnglishName("oxygen");
+
+            // 3. Добавляем картинки, привязывая их к ID элемента
+                Media imgGold = new Media();
+                imgGold.elementID = savedGold.id;
+                imgGold.type = "image";
+                imgGold.filePath = "gold"; // Имя файла в drawable
+                mediaDao.insert(imgGold);
+                android.util.Log.d("DB_TEST", "Добавлена картинка для Золота");
+
+                Media imgOxygen = new Media();
+                imgOxygen.elementID = savedOxygen.id;
+                imgOxygen.type = "image";
+                imgOxygen.filePath = "oxygen"; // Имя файла в drawable
+                mediaDao.insert(imgOxygen);
+                Log.d("DB_TEST", "Добавлена картинка для Кислорода");
+
+                Log.d("DB_TEST", "База успешно заполнена!");
+        } else {
+            android.util.Log.d("DB_TEST", "База уже была заполнена ранее.");
+        }
+
+        displayElementFromDb("oxygen");
     }
 
+    private void displayElementFromDb(String engName) {
+        AppDatabase db = AppDatabase.getInstance(this);
+        Element element = db.elementDao().getElementByEnglishName(engName);
+
+        if (element != null) {
+            TvResultContent.setText(element.NameEn);
+            TvResultContent.setVisibility(View.VISIBLE);
+            List<Media> images = db.mediaDao().getImagesElement(element.id);
+            if (!images.isEmpty()) {
+                String imagePath = images.get(0).filePath;
+                android.util.Log.d("DB_STEP", "4. Имя картинки из БД: " + imagePath);
+                //Видит ли программа эту картинку в папке drawable
+                int resId = getResources().getIdentifier(imagePath, "drawable", getPackageName());
+
+                if (resId != 0) {
+                    IvResultImage.setImageResource(resId);
+                    IvResultImage.setVisibility(View.VISIBLE);
+                } else {
+                    Log.d("DB_STEP", "ОШИБКА: Картинка не найдена в drawable!");
+                }
+            }
+        } else {
+            Log.d("DB_STEP", "ОШИБКА: Элемент не найден в базе данных!");
+        }
+    }
     private void initViews() {
         btnScan = findViewById(R.id.btn_scan);
         btnClear = findViewById(R.id.btn_clear);
