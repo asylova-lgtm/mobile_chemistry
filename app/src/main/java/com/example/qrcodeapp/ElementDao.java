@@ -9,11 +9,11 @@ import java.util.List;
 @Dao
 public interface ElementDao {
     @Insert
-    void insert(Element element); //заполнение таблицы
+    void insert(Element elements); //заполнение таблицы
 
-    @Query("Select * from element") // метод для получения всех элементов из таблицы
+    @Query("Select * from elements") // метод для получения всех элементов из таблицы
     List<Element> getAllElements();
 
-    @Query("Select * from element where name_en = :engName limit 1") //метод для поиска по анг. названию
+    @Query("Select * from elements where name_en = :engName limit 1") //метод для поиска по анг. названию
     Element getElementByEnglishName(String engName);
 }

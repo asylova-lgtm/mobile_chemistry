@@ -15,7 +15,8 @@ import androidx.room.PrimaryKey;
 
 public class Media {
     @PrimaryKey(autoGenerate = true)
-    public int id;
+    @ColumnInfo(name = "media_id")
+    public int MediaId;
 
     @ColumnInfo(name = "element_id")
     public int elementID;
@@ -25,6 +26,9 @@ public class Media {
 
     @ColumnInfo(name = "file_path")
     public String filePath;
+
+    @ColumnInfo(name = "description")
+    public String Description;
 
     public Media(){}
 }

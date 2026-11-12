@@ -62,20 +62,15 @@ public class MainActivity extends AppCompatActivity {
         AppDatabase db = AppDatabase.getInstance(this);
         ElementDao elementDao = db.elementDao();
         MediaDao mediaDao = db.mediaDao();
+        CategoryDao categoryDao = db.categoryDao();
 
         if (elementDao.getAllElements().isEmpty()) {
             android.util.Log.d("DB_TEST", "База пуста.");
 
-            Element gold = new Element();
-            gold.symbol = "Au";
-            gold.NameRu = "Золото";
-            gold.NameEn = "gold";
+            Element gold = new Element();gold.symbol = "Au";gold.NameRu = "Золото";gold.NameEn = "gold";
             elementDao.insert(gold);
 
-            Element oxygen = new Element();
-            oxygen.symbol = "O";
-            oxygen.NameRu = "Кислород";
-            oxygen.NameEn = "oxygen";
+            Element oxygen = new Element();oxygen.symbol = "O";oxygen.NameRu = "Кислород";oxygen.NameEn = "oxygen";
             elementDao.insert(oxygen);
 
             // 2. полчение id элементов
@@ -83,17 +78,11 @@ public class MainActivity extends AppCompatActivity {
             Element savedOxygen = elementDao.getElementByEnglishName("oxygen");
 
             // 3. Добавляем картинки, привязывая их к ID элемента
-                Media imgGold = new Media();
-                imgGold.elementID = savedGold.id;
-                imgGold.type = "image";
-                imgGold.filePath = "gold"; // Имя файла в drawable
+                Media imgGold = new Media();imgGold.elementID = savedGold.ElementId;imgGold.type = "image";imgGold.filePath = "gold"; // Имя файла в drawable
                 mediaDao.insert(imgGold);
                 android.util.Log.d("DB_TEST", "Добавлена картинка для Золота");
 
-                Media imgOxygen = new Media();
-                imgOxygen.elementID = savedOxygen.id;
-                imgOxygen.type = "image";
-                imgOxygen.filePath = "oxygen"; // Имя файла в drawable
+                Media imgOxygen = new Media();imgOxygen.elementID = savedOxygen.ElementId;imgOxygen.type = "image";imgOxygen.filePath = "oxygen";
                 mediaDao.insert(imgOxygen);
                 Log.d("DB_TEST", "Добавлена картинка для Кислорода");
 
@@ -112,7 +101,7 @@ public class MainActivity extends AppCompatActivity {
         if (element != null) {
             TvResultContent.setText(element.NameEn);
             TvResultContent.setVisibility(View.VISIBLE);
-            List<Media> images = db.mediaDao().getImagesElement(element.id);
+            List<Media> images = db.mediaDao().getImagesElement(element.ElementId);
             if (!images.isEmpty()) {
                 String imagePath = images.get(0).filePath;
                 android.util.Log.d("DB_STEP", "4. Имя картинки из БД: " + imagePath);
