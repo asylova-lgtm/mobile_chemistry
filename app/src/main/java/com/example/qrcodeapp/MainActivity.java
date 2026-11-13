@@ -67,34 +67,17 @@ public class MainActivity extends AppCompatActivity {
         if (elementDao.getAllElements().isEmpty()) {
             android.util.Log.d("DB_TEST", "База пуста.");
 
-            Element gold = new Element();gold.symbol = "Au";gold.NameRu = "Золото";gold.NameEn = "gold";
-            elementDao.insert(gold);
+            Categories metals = new Categories();
+            metals.NameCategories = "Металлы";
+            categoryDao.insert(metals);
 
-            Element oxygen = new Element();oxygen.symbol = "O";oxygen.NameRu = "Кислород";oxygen.NameEn = "oxygen";
-            elementDao.insert(oxygen);
-
-            // 2. полчение id элементов
-            Element savedGold = elementDao.getElementByEnglishName("gold");
-            Element savedOxygen = elementDao.getElementByEnglishName("oxygen");
-
-            // 3. Добавляем картинки, привязывая их к ID элемента
-                Media imgGold = new Media();imgGold.elementID = savedGold.ElementId;imgGold.type = "image";imgGold.filePath = "gold"; // Имя файла в drawable
-                mediaDao.insert(imgGold);
-                android.util.Log.d("DB_TEST", "Добавлена картинка для Золота");
-
-                Media imgOxygen = new Media();imgOxygen.elementID = savedOxygen.ElementId;imgOxygen.type = "image";imgOxygen.filePath = "oxygen";
-                mediaDao.insert(imgOxygen);
-                Log.d("DB_TEST", "Добавлена картинка для Кислорода");
-
-                Log.d("DB_TEST", "База успешно заполнена!");
-        } else {
-            android.util.Log.d("DB_TEST", "База уже была заполнена ранее.");
+            Categories nonMetals = new Categories();
+            metals.NameCategories = "Неметаллы";
+            categoryDao.insert(nonMetals);
         }
-
-        displayElementFromDb("oxygen");
     }
 
-    private void displayElementFromDb(String engName) {
+    /*private void displayElementFromDb(String engName) {
         AppDatabase db = AppDatabase.getInstance(this);
         Element element = db.elementDao().getElementByEnglishName(engName);
 
@@ -118,7 +101,8 @@ public class MainActivity extends AppCompatActivity {
         } else {
             Log.d("DB_STEP", "ОШИБКА: Элемент не найден в базе данных!");
         }
-    }
+    }*/
+
     private void initViews() {
         btnScan = findViewById(R.id.btn_scan);
         btnClear = findViewById(R.id.btn_clear);

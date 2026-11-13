@@ -36,7 +36,7 @@ public class Element {
     public String Uses;
 
     @ColumnInfo(name = "categories_id")
-    public String CategoriesId;
+    public int CategoriesId;
 
     public Element() {}
 
