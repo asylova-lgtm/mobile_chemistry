@@ -8,10 +8,10 @@ import androidx.room.PrimaryKey;
 public class Categories {
     @PrimaryKey(autoGenerate = true)
     @ColumnInfo(name = "categories_id")
-    public int CategoriesId;
+    public int categoriesId;
 
     @ColumnInfo(name = "name_categories")
-    public String NameCategories;
+    public String nameCategories;
 
     public Categories() {}
 }

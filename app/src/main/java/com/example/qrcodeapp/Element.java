@@ -5,39 +5,26 @@ import androidx.room.Entity;
 import androidx.room.ForeignKey;
 import androidx.room.PrimaryKey;
 
-@Entity(tableName = "elements", foreignKeys = @ForeignKey(
-        entity = Categories.class,
-        parentColumns = "id",
-        childColumns = "categories_id",
-        onDelete = ForeignKey.SET_NULL))
-
-//создание класса-сущности для элементов
+@Entity(tableName = "elements",
+        foreignKeys = @ForeignKey(
+                entity = Categories.class,
+                parentColumns = "categories_id",
+                childColumns = "categoryId",
+                onDelete = ForeignKey.SET_NULL))
 public class Element {
-    @PrimaryKey(autoGenerate = true) //под вопросом, как вариант сделать id атомный номер элемента в таблице М.
-    @ColumnInfo(name = "element_id")
-    public int ElementId;
+    @PrimaryKey(autoGenerate = true)
+    @ColumnInfo(name = "id")
+    public int id;
 
-    @ColumnInfo(name = "symbol")
-    public String symbol;
+    @ColumnInfo(name = "symbol") public String symbol;
+    @ColumnInfo(name = "name_ru") public String nameRu;
+    @ColumnInfo(name = "name_en") public String nameEn;
+    @ColumnInfo(name = "atomic_number") public int atomicNumber;
+    @ColumnInfo(name = "description") public String description;
+    @ColumnInfo(name = "uses") public String uses;
 
-    @ColumnInfo(name = "name_ru")
-    public String NameRu;
-
-    @ColumnInfo(name = "name_en")
-    public String NameEn;
-
-    @ColumnInfo(name = "atomic_number")
-    public int AtomicNumber;
-
-    @ColumnInfo(name = "description")
-    public String Description;
-
-    @ColumnInfo(name = "uses")
-    public String Uses;
-
-    @ColumnInfo(name = "categories_id")
-    public int CategoriesId;
+    @ColumnInfo(name = "categoryId")
+    public Integer categoryId; // Может быть null
 
     public Element() {}
-
 }

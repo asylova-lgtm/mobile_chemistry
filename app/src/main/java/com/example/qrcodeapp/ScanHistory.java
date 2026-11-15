@@ -5,28 +5,30 @@ import androidx.room.Entity;
 import androidx.room.ForeignKey;
 import androidx.room.PrimaryKey;
 
-@Entity(tableName = "scan_history", foreignKeys = @ForeignKey(
-        entity = Element.class,
-        parentColumns = "element_id",
-        childColumns = "element_Id",
-        onDelete = ForeignKey.SET_NULL
-))
+@Entity(tableName = "scan_history",
+        foreignKeys = @ForeignKey(
+                entity = Element.class,
+                parentColumns = "id",
+                childColumns = "elementId",
+                onDelete = ForeignKey.SET_NULL
+        ))
 public class ScanHistory {
     @PrimaryKey(autoGenerate = true)
     @ColumnInfo(name = "scan_id")
-    public int ScanId;
+    public int scanId;
 
-    @ColumnInfo(name = "element_id")
-    public int Element;
+    // ОБЯЗАТЕЛЬНО Integer, чтобы можно было сохранить NULL для обычного текста
+    @ColumnInfo(name = "elementId")
+    public Integer elementId;
 
     @ColumnInfo(name = "scanned_date")
-    public int ScannedDate;
+    public long scannedDate;
 
     @ColumnInfo(name = "data_type")
-    public int DataType;
+    public String dataType;
 
     @ColumnInfo(name = "display_text")
-    public int DisplayText;
+    public String displayText;
 
     public ScanHistory() {}
 }

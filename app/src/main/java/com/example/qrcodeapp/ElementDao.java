@@ -14,6 +14,8 @@ public interface ElementDao {
     @Query("Select * from elements") // метод для получения всех элементов из таблицы
     List<Element> getAllElements();
 
-    @Query("Select * from elements where name_en = :engName limit 1") //метод для поиска по анг. названию
+    @Query("SELECT * FROM elements WHERE name_en = :engName LIMIT 1")
     Element getElementByEnglishName(String engName);
+    @Query("SELECT * FROM elements WHERE id = :id LIMIT 1")
+    Element getElementById(int id);
 }

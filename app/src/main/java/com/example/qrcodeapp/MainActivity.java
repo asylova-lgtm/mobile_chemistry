@@ -35,13 +35,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
-    private static final String LOCAL_PREFIX = "local://"; //попытка локального хранения данных в qr-коде
+    //private static final String LOCAL_PREFIX = "local://"; //попытка локального хранения данных в qr-коде
     // UI элементы
     private Button btnScan, btnClear, btnClearHistory, btnShowDescription, btn_combine_elements;
     private TextView TvResultTitle, TvResultType, TvResultContent, TvResultLink;
     private ImageView IvResultImage;
     private LinearLayout historyContainer;
     private ScrollView scrollView;
+    private Element currentDisplayedElement = null;
 
     // История сканирований
     private List<ScanHistoryItem> historyList = new ArrayList<>();
@@ -59,49 +60,41 @@ public class MainActivity extends AppCompatActivity {
         initViews();
         setupClickListeners();
         // TEST BD
-        AppDatabase db = AppDatabase.getInstance(this);
-        ElementDao elementDao = db.elementDao();
-        MediaDao mediaDao = db.mediaDao();
-        CategoryDao categoryDao = db.categoryDao();
-
-        if (elementDao.getAllElements().isEmpty()) {
-            android.util.Log.d("DB_TEST", "База пуста.");
-
-            Categories metals = new Categories();
-            metals.NameCategories = "Металлы";
-            categoryDao.insert(metals);
-
-            Categories nonMetals = new Categories();
-            metals.NameCategories = "Неметаллы";
-            categoryDao.insert(nonMetals);
-        }
+        DatabasesInitializer.populateDatabase(this);
+        updateHistoryDisplay();
     }
 
-    /*private void displayElementFromDb(String engName) {
+    private void displayElementFromDb(String englishName) {
         AppDatabase db = AppDatabase.getInstance(this);
-        Element element = db.elementDao().getElementByEnglishName(engName);
+        Element element = db.elementDao().getElementByEnglishName(englishName);
 
         if (element != null) {
-            TvResultContent.setText(element.NameEn);
+            currentDisplayedElement = element;
+            // 1. Показываем русское название на главном экране
+            TvResultTitle.setText("Результат сканирования:");
+            TvResultContent.setText(element.nameRu);
             TvResultContent.setVisibility(View.VISIBLE);
-            List<Media> images = db.mediaDao().getImagesElement(element.ElementId);
-            if (!images.isEmpty()) {
-                String imagePath = images.get(0).filePath;
-                android.util.Log.d("DB_STEP", "4. Имя картинки из БД: " + imagePath);
-                //Видит ли программа эту картинку в папке drawable
-                int resId = getResources().getIdentifier(imagePath, "drawable", getPackageName());
 
+            // 2. Устанавливаем тип (категорию)
+            if (element.categoryId != null) {
+                Categories cat = db.categoryDao().getCategoryById(element.categoryId);
+                if (cat != null) {
+                    TvResultType.setText("Тип: Химический элемент (" + cat.nameCategories + ")");
+                }
+            }
+
+            // 3. Показываем картинку
+            List<Media> media = db.mediaDao().getImagesForElement(element.id);
+            if (!media.isEmpty()) {
+                int resId = getResources().getIdentifier(media.get(0).filePath, "drawable", getPackageName());
                 if (resId != 0) {
                     IvResultImage.setImageResource(resId);
                     IvResultImage.setVisibility(View.VISIBLE);
-                } else {
-                    Log.d("DB_STEP", "ОШИБКА: Картинка не найдена в drawable!");
                 }
             }
-        } else {
-            Log.d("DB_STEP", "ОШИБКА: Элемент не найден в базе данных!");
         }
-    }*/
+    }
+
 
     private void initViews() {
         btnScan = findViewById(R.id.btn_scan);
@@ -125,17 +118,12 @@ public class MainActivity extends AppCompatActivity {
         if (btnShowDescription != null) {
             btnShowDescription.setOnClickListener(v -> showLastScanDescription());
         }
-        btn_combine_elements.setOnClickListener(v -> showCombineElementDialog());
+        //btn_combine_elements.setOnClickListener(v -> showCombineElementDialog());
     }
 
     private void startQRScanner() {
-        IntentIntegrator integrator = new IntentIntegrator(this);
-        integrator.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
-        integrator.setPrompt("Наведите камеру на QR-код");
-        integrator.setCameraId(0);
-        integrator.setBeepEnabled(true);
-        integrator.setBarcodeImageEnabled(true);
-        integrator.initiateScan();
+        Intent intent = new Intent(this, CustomScannerActivity.class);
+        startActivityForResult(intent, 100);
     }
 
     @Override
@@ -143,14 +131,11 @@ public class MainActivity extends AppCompatActivity {
         super.onActivityResult(requestCode, resultCode, data);
 
         try {
-            IntentResult result = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
-
-            if (result != null) {
-                if (result.getContents() == null) {
-                    Toast.makeText(this, "Сканирование отменено", Toast.LENGTH_SHORT).show();
-                } else {
-                    String scannedData = result.getContents();
-                    processScannedData(scannedData);
+            if (requestCode == 100 && resultCode == RESULT_OK && data != null) {
+                String scannedText = data.getStringExtra("SCAN_RESULT");
+                if (scannedText != null) {
+                    // Передаем отсканированный текст в наш метод обработки (база данных)
+                    processScannedData(scannedText);
                 }
             }
         } catch (Exception e) {
@@ -160,275 +145,57 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void processScannedData(String data) {
-        Log.d("QR_Scan", "Полученные данные: " + data);
-        Log.d("QR_Scan", "Длина: " + data.length());
-        try {
-            // Скрываем все элементы текущего результата
-            hideAllResultViews();
+        String scannedText = data.trim().toLowerCase();
 
-            TvResultTitle.setVisibility(View.VISIBLE);
-            // ⭐ НОВОЕ: Проверка на локальную картинку
-            if (data.startsWith(LOCAL_PREFIX)) {
-                // Парсим данные
-                String[] parsed = parseLocalImageData(data);
-                String imageName = parsed[0];
-                String description = parsed[1];
-                int resId = getResources().getIdentifier(imageName, "drawable", getPackageName());
+        // Скрываем старые результаты
+        hideAllResultViews();
+        TvResultTitle.setVisibility(View.VISIBLE);
+        TvResultType.setVisibility(View.VISIBLE);
 
+        // 1. Ищем элемент в БД
+        AppDatabase db = AppDatabase.getInstance(this);
+        Element element = db.elementDao().getElementByEnglishName(scannedText);
 
-                // Показываем картинку
-                boolean imageLoaded = loadLocalImage(imageName);
+        if (element != null) {
+            // === ЕСЛИ ЭТО ХИМИЧЕСКИЙ ЭЛЕМЕНТ ===
+            // Выводим данные на главный экран (картинка + название)
+            displayElementFromDb(scannedText);
 
-                // ОПРЕДЕЛЯЕМ, ЧТО ПОКАЗЫВАТЬ В КАЧЕСТВЕ НАЗВАНИЯ
-                String displayTitle = null;
-                String elementSymbol = null;
-                ChemicalData.ChemicalElement element = null;
+            // Открываем всплывающее окно с полным описанием
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                showElementDialog(element);
+            }, 500);
 
-                // 1. Если есть описание и это хим. элемент
-                if (description != null && isChemicalElement(description)) {
-                    elementSymbol = getChemicalSymbolFromName(description);
-                    if (elementSymbol != null) {
-                        element = ChemicalData.getElement(elementSymbol);
-                        if (element != null) {
-                            displayTitle = element.getName(); // русское название
-                        }
-                    }
-                }
+            // Сохраняем в историю в БД
+            ScanHistory history = new ScanHistory();
+            history.elementId = element.id;
+            history.displayText = element.nameRu;
+            history.dataType = "Химический элемент";
+            history.scannedDate = System.currentTimeMillis();
+            db.scanHistoryDao().insert(history);
 
-                // 2. Если нет описания, но имя файла — хим. элемент
-                if (displayTitle == null && isChemicalElement(imageName)) {
-                    elementSymbol = getChemicalSymbolFromName(imageName);
-                    if (elementSymbol != null) {
-                        element = ChemicalData.getElement(elementSymbol);
-                        if (element != null) {
-                            displayTitle = element.getName(); // русское название
-                        }
-                    }
-                }
+        } else {
+            // === ЕСЛИ ЭТО НЕ ЭЛЕМЕНТ (обычный текст) ===
+            TvResultType.setText("Тип: Текст");
+            TvResultContent.setVisibility(View.VISIBLE);
+            TvResultContent.setText(scannedText);
 
-                // 3. Если всё ещё нет — показываем описание из QR или имя файла
-                if (displayTitle == null) {
-                    if (description != null && !description.isEmpty()) {
-                        displayTitle = description;
-                    } else {
-                        displayTitle = imageName;
-                    }
-                }
-
-                // ПОКАЗЫВАЕМ НАЗВАНИЕ (а не сырые данные)
-                if (TvResultContent != null && displayTitle != null) {
-                    TvResultContent.setVisibility(View.VISIBLE);
-                    TvResultContent.setText(displayTitle);
-                    TvResultContent.setGravity(Gravity.CENTER);
-                }
-
-                // Тип и диалог для химического элемента
-                if (element != null) {
-                    TvResultType.setText("Тип: Химический элемент");
-                    ChemicalData.ChemicalElement finalElement = element;
-                    new android.os.Handler().postDelayed(() -> showElementDialog(finalElement), 500);
-                } else {
-                    if (description != null && !description.isEmpty()) {
-                        TvResultType.setText("Тип: Локальное изображение с описанием");
-                    } else {
-                        TvResultType.setText("Тип: Локальное изображение");
-                    }
-                }
-
-                ScanHistoryItem item = new ScanHistoryItem(
-                        data,
-                        "Химический элемент",
-                        displayTitle,
-                        null,
-                        null,
-                        resId   // ← это важно!
-                );
-                addToHistory(item);
-
-                scrollToBottom();
-                return;
-            }
-
-            // Определяем тип данных
-            String dataType = determineDataType(data);
-            Log.d("QR_Scan", "Тип: " + dataType);
-
-            TvResultType.setVisibility(View.VISIBLE);
-            //TvResultType.setText("Тип: " + dataType);
-
-
-
-            // Обработка формата "URL|Описание"
-            if (dataType.equals("Ссылка на изображение с описанием") ||
-                    dataType.equals("URL с описанием") ||
-                    dataType.equals("Химический элемент с изображением")) {
-                Log.d("QR_Scan", "Вошли в блок URL|Описание: ");
-
-                String[] parts = data.split("\\|", 2);
-                String imageUrl = parts[0].trim();
-                String description = parts[1].trim();
-
-                Log.d("QR_Scan", "URL: " + imageUrl);
-                Log.d("QR_Scan", "Описание: " + description);
-
-                // Показываем описание
-                if (TvResultContent != null) {
-                    Log.d("QR_Scan", "Описание в TvResult");
-                    TvResultContent.setVisibility(View.VISIBLE);
-                    TvResultContent.setText(description);
-                    TvResultContent.setGravity(Gravity.CENTER);
-                } else{
-                    Log.d("QR_Scan", "Описание == null! ");
-                }
-
-                // ⭐ 2. ПРОВЕРЯЕМ, ЯВЛЯЕТСЯ ЛИ ОПИСАНИЕ ХИМИЧЕСКИМ ЭЛЕМЕНТОМ
-                boolean isChem = isChemicalElement(description);
-                Log.d("QR_Scan", "Является химическим элементом? " + isChem);
-
-                if (isChem) {
-                    Log.d("QR_Scan", "Это химический элемент!");
-                    TvResultType.setText("Тип: Химический элемент");
-
-                    // Получаем символ элемента из описания
-                    String symbol = getChemicalSymbolFromName(description);
-                    Log.d("QR_Scan", "Символ из описания: " + symbol);
-
-                    if (symbol != null) {
-                        ChemicalData.ChemicalElement element = ChemicalData.getElement(symbol);
-                        Log.d("QR_Scan", "Найден элемент в ChemicalData: " + (element != null ? element.getName() : "null"));
-
-                        if (element != null) {
-                            Log.d("QR_Scan", "Показываем диалог с элементом");
-                            //new android.os.Handler().postDelayed(() -> showElementDialog(element), 300);
-                        } else {
-                            Log.e("QR_Scan", "Элемент не найден в ChemicalData для символа: " + symbol);
-                        }
-                    } else {
-                        Log.e("QR_Scan", "Не удалось получить символ из описания: " + description);
-                    }
-                }
-
-                // Показываем изображение
-                if (IvResultImage != null) {
-                    IvResultImage.setVisibility(View.VISIBLE);
-                    loadImageFromUrl(imageUrl, position -> {
-                        // После загрузки изображения добавляем в историю
-                        ScanHistoryItem item = new ScanHistoryItem(
-                                data, dataType, description, null, imageUrl, 0);
-                        addToHistory(item);
-                    });
-                }
-
-                // ⭐ Если это химический элемент - показываем диалог
-                if (dataType.equals("Химический элемент с изображением")) {
-                    String symbol = getChemicalSymbolFromName(description);
-                    if (symbol != null) {
-                        ChemicalData.ChemicalElement element = ChemicalData.getElement(symbol);
-                        if (element != null) {
-                            // Показываем диалог с задержкой, чтобы сначала загрузилась картинка
-                            IvResultImage.postDelayed(() -> showElementDialog(element), 500);
-                        }
-                    }
-                }
-
-                // Показываем ссылку
-                if (TvResultLink != null) {
-                    TvResultLink.setVisibility(View.VISIBLE);
-                    //TvResultLink.setText("Ссылка: " + imageUrl);
-                    TvResultLink.setOnClickListener(v -> {
-                        Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(imageUrl));
-                        startActivity(browserIntent);
-                    });
-                }
-            }
-
-            // Ссылка на изображение (без описания)
-            else if (isImageUrl(data)) {
-                if (IvResultImage != null) {
-                    IvResultImage.setVisibility(View.VISIBLE);
-                    loadImageFromUrl(data, position -> {
-                        ScanHistoryItem item = new ScanHistoryItem(
-                                data, dataType, data, null, data, 0);
-                        addToHistory(item);
-                    });
-                }
-
-                if (TvResultLink != null) {
-                    TvResultLink.setVisibility(View.VISIBLE);
-                    //TvResultLink.setText("Ссылка: " + data);
-                    TvResultLink.setOnClickListener(v -> {
-                        Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(data));
-                        startActivity(browserIntent);
-                    });
-                }
-            }
-            // Base64 изображение
-            else if (isBase64Image(data)) {
-                Bitmap bitmap = decodeBase64ToBitmap(data);
-                if (bitmap != null && IvResultImage != null) {
-                    IvResultImage.setVisibility(View.VISIBLE);
-                    IvResultImage.setImageBitmap(bitmap);
-
-                    ScanHistoryItem item = new ScanHistoryItem(
-                            data, dataType, "Base64 изображение", bitmap, null, 0);
-                    addToHistory(item);
-                } else {
-                    if (TvResultContent != null) {
-                        TvResultContent.setVisibility(View.VISIBLE);
-                        TvResultContent.setText("Ошибка декодирования Base64");
-                    }
-                }
-            }
-            // Обычная ссылка
-            else if (Patterns.WEB_URL.matcher(data).matches()) {
-                if (TvResultLink != null) {
-                    TvResultLink.setVisibility(View.VISIBLE);
-                    TvResultLink.setText(data);
-                    TvResultLink.setOnClickListener(v -> {
-                        Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(data));
-                        startActivity(browserIntent);
-                    });
-
-                    ScanHistoryItem item = new ScanHistoryItem(
-                            data, dataType, data, null, null, 0);
-                    addToHistory(item);
-                }
-            }
-            // Текст
-            else {
-                if (TvResultContent != null) {
-                    TvResultContent.setVisibility(View.VISIBLE);
-                    TvResultContent.setText(data);
-                    TvResultContent.setGravity(Gravity.CENTER);
-
-                    ScanHistoryItem item = new ScanHistoryItem(
-                            data, dataType, data, null, null, 0);
-                    addToHistory(item);
-                }
-            }
-
-            // Прокручиваем к результату
-            scrollToBottom();
-
-        } catch (Exception e) {
-            Toast.makeText(this, "Ошибка: " + e.getMessage(), Toast.LENGTH_LONG).show();
-            e.printStackTrace();
+            // Пишем в историю
+            ScanHistory history = new ScanHistory();
+            history.elementId = null;
+            history.displayText = scannedText;
+            history.dataType = "Текст";
+            history.scannedDate = System.currentTimeMillis();
+            db.scanHistoryDao().insert(history);
         }
-        // Добавляем обработчик долгого нажатия на текущий результат
-        LinearLayout resultContainer = findViewById(R.id.current_result_container);
-        if (resultContainer != null) {
-            resultContainer.setOnLongClickListener(v -> {
-                if (!historyList.isEmpty()) {
-                    // Показываем диалог с последним отсканированным элементом
-                    showDescriptionDialog(historyList.get(0));
-                }
-                return true;
-            });
-        }
+        updateHistoryDisplay();
+        scrollToBottom();
     }
 
-    private void showElementDialog(ChemicalData.ChemicalElement element) {
+    private void showElementDialog(Element element) {
         try {
+            AppDatabase db = AppDatabase.getInstance(this);
+
             AlertDialog.Builder builder = new AlertDialog.Builder(this);
             View dialogView = getLayoutInflater().inflate(R.layout.dialog_discription, null);
             builder.setView(dialogView);
@@ -442,30 +209,20 @@ public class MainActivity extends AppCompatActivity {
             TextView descriptionView = dialogView.findViewById(R.id.dialog_description);
             Button closeButton = dialogView.findViewById(R.id.dialog_close);
 
-            String title = "Химический элемент: " + element.getName();
-            String typeInfo = "Символ: " + element.getSymbol() + " | Атомный номер: " + element.getAtomicNumber();
-
-            // Расширенная информация
-            String extraInfo = "";
-            if (element.getDiscoveryYear() > 0) {
-                extraInfo += "Год открытия: " + element.getDiscoveryYear() + "\n";
+            // Получаем категорию из БД
+            String categoryName = "Неизвестно";
+            if (element.categoryId != null) {
+                Categories cat = db.categoryDao().getCategoryById(element.categoryId);
+                if (cat != null) categoryName = cat.nameCategories;
             }
-            extraInfo += "Атомная масса: " + element.getAtomicMass() + " а.е.м.\n";
-            extraInfo += "Температура плавления: " + element.getMeltingPoint() + " K\n";
-            extraInfo += "Температура кипения: " + element.getBoilingPoint() + " K\n";
-            extraInfo += "Плотность: " + element.getDensity() + " г/см³\n";
-            if (element.getSoundSpeed() > 0) {
-                extraInfo += "Скорость звука: " + element.getSoundSpeed() + " м/с\n";
-            }
-            extraInfo += "Стабильных изотопов: " + element.getStableIsotopes() + "\n";
 
-            String fullDescription = extraInfo + "\n═══════════════════════════\n" +
-                    "ОПИСАНИЕ:\n" + element.getDescription() + "\n\n═══════════════════════════\n" +
-                    "ПРИМЕНЕНИЕ:\n" + element.getUses();
+            // Заполняем поля окна
+            titleView.setText("Химический элемент:\n" + element.nameRu);
+            typeView.setText("Символ: " + element.symbol + " | Атомный номер: " + element.atomicNumber);
+            timeView.setText("Группа: " + categoryName);
 
-            timeView.setText("Группа: " + element.getGroup());
-            titleView.setText(title);
-            typeView.setText(typeInfo);
+            String fullDescription = "ОПИСАНИЕ:\n" + element.description + "\n\n═════════════════\n" +
+                    "ПРИМЕНЕНИЕ:\n" + element.uses;
             descriptionView.setText(fullDescription);
 
             closeButton.setOnClickListener(v -> dialog.dismiss());
@@ -473,10 +230,11 @@ public class MainActivity extends AppCompatActivity {
 
         } catch (Exception e) {
             e.printStackTrace();
-            Toast.makeText(this, "Ошибка при открытии диалога: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "Ошибка при открытии диалога", Toast.LENGTH_SHORT).show();
         }
     }
-    private boolean loadLocalImage(String imageName){
+
+    /*private boolean loadLocalImage(String imageName){
         try{
             String resourceName = imageName;
             if(resourceName.contains(".")){
@@ -498,9 +256,9 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(this, "Ошибка загрузки: " + e.getMessage(), Toast.LENGTH_SHORT).show();
             return false;
         }
-    }
+    }*/
 
-    private String[] parseLocalImageData(String data){
+    /*private String[] parseLocalImageData(String data){
         String withoutPrefix = data.substring(LOCAL_PREFIX.length());
         if (withoutPrefix.contains("|")){
             String[] parts = withoutPrefix.split("\\|", 2);
@@ -508,7 +266,7 @@ public class MainActivity extends AppCompatActivity {
         } else {
             return new String[] { withoutPrefix.trim(), null };
         }
-    }
+    }*/
     private void loadImageFromUrl(String imageUrl, ImageLoadCallback callback) {
         if (IvResultImage == null) return;
 
@@ -543,21 +301,14 @@ public class MainActivity extends AppCompatActivity {
 
     // ================ МЕТОДЫ ДЛЯ РАБОТЫ С ИСТОРИЕЙ ================
 
-    private void addToHistory(ScanHistoryItem item) {
-        // Добавляем в начало списка
-        historyList.add(0, item);
-
-        // Ограничиваем размер истории
-        if (historyList.size() > MAX_HISTORY_ITEMS) {
-            historyList.remove(historyList.size() - 1);
-        }
-
-        // Обновляем отображение истории
-        updateHistoryDisplay();
-    }
+    // ================ РАБОТА С ИСТОРИЕЙ ИЗ БД ================
 
     private void updateHistoryDisplay() {
         historyContainer.removeAllViews();
+        AppDatabase db = AppDatabase.getInstance(this);
+
+        // Получаем историю из БД (свежие сканирования сверху)
+        List<ScanHistory> historyList = db.scanHistoryDao().getAllHistory();
 
         if (historyList.isEmpty()) {
             TextView emptyView = new TextView(this);
@@ -570,7 +321,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         for (int i = 0; i < historyList.size(); i++) {
-            ScanHistoryItem item = historyList.get(i);
+            ScanHistory item = historyList.get(i);
             View historyItemView = getLayoutInflater().inflate(R.layout.history_item, historyContainer, false);
 
             TextView typeView = historyItemView.findViewById(R.id.history_item_type);
@@ -578,102 +329,105 @@ public class MainActivity extends AppCompatActivity {
             TextView textView = historyItemView.findViewById(R.id.history_item_text);
             ImageView imageView = historyItemView.findViewById(R.id.history_item_image);
 
-            typeView.setText(item.getDataType());
-            timeView.setText(item.getTimestamp());
+            // Форматируем время
+            java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("dd.MM.yyyy HH:mm:ss");
+            timeView.setText(sdf.format(new java.util.Date(item.scannedDate)));
+            typeView.setText(item.dataType);
 
-            // Устанавливаем текст (обрезаем если длинный)
-            String displayText = item.getDisplayText();
-            if (displayText.length() > 50) {
+            String displayText = item.displayText;
+            if (displayText != null && displayText.length() > 50) {
                 displayText = displayText.substring(0, 47) + "...";
             }
             textView.setText(displayText);
 
-            if (item.hasImage()) {
-                imageView.setVisibility(View.VISIBLE);
-
-                if (item.getImageBitmap() != null) {
-                    // Base64 изображение
-                    imageView.setImageBitmap(item.getImageBitmap());
-                } else if (item.getImageUrl() != null && !item.getImageUrl().isEmpty()) {
-                    // URL изображения (из интернета)
-                    Glide.with(this)
-                            .load(item.getImageUrl())
-                            .placeholder(R.drawable.placeholder)
-                            .error(R.drawable.error)
-                            .centerCrop()
-                            .into(imageView);
-                } else if (item.getLocalImageResId() != 0) {
-                    // Локальная картинка из папки drawable
-                    imageView.setImageResource(item.getLocalImageResId());
+            // Если есть ID элемента, показываем картинку
+            if (item.elementId != null) {
+                List<Media> media = db.mediaDao().getImagesForElement(item.elementId);
+                if (!media.isEmpty()) {
+                    int resId = getResources().getIdentifier(media.get(0).filePath, "drawable", getPackageName());
+                    if (resId != 0) {
+                        imageView.setImageResource(resId);
+                        imageView.setVisibility(View.VISIBLE);
+                    }
                 }
-            } else {
-                imageView.setVisibility(View.GONE);
             }
 
-            // Добавляем обработчик клика на элемент истории
             final int position = i;
-            historyItemView.setOnClickListener(v -> restoreFromHistory(position));
+            // Обработчик короткого нажатия
+            historyItemView.setOnClickListener(v -> restoreFromHistory(historyList.get(position)));
 
-            // Добавляем обработчик ДОЛГОГО нажатия - показать описание
+            // Обработчик долгого нажатия (пока оставим так)
             historyItemView.setOnLongClickListener(v -> {
-                ScanHistoryItem item2 = historyList.get(position);
-                showDescriptionDialog(item2);
-                return true; // true = событие обработано
+                Toast.makeText(this, "Долгое нажатие пока в разработке", Toast.LENGTH_SHORT).show();
+                return true;
             });
 
             historyContainer.addView(historyItemView);
         }
     }
 
-    private void restoreFromHistory(int position) {
-        if (position >= 0 && position < historyList.size()) {
-            ScanHistoryItem item = historyList.get(position);
+    // Восстановление из истории по клику
+    private void restoreFromHistory(ScanHistory item) {
+        clearCurrentResult();
+        TvResultTitle.setVisibility(View.VISIBLE);
+        TvResultType.setVisibility(View.VISIBLE);
 
-            // Очищаем текущий результат
-            clearCurrentResult();
+        TvResultType.setText("Тип: " + item.dataType);
 
-            // Восстанавливаем данные
-            TvResultTitle.setVisibility(View.VISIBLE);
-            TvResultType.setVisibility(View.VISIBLE);
-            //TvResultType.setText("Тип: " + item.getDataType());
+        if (item.elementId != null) {
+            AppDatabase db = AppDatabase.getInstance(this);
+            // Ищем элемент по его ID из базы данных
+            Element element = db.elementDao().getElementById(item.elementId);
 
-            if (item.hasImage()) {
-                if (item.getImageBitmap() != null) {
-                    IvResultImage.setVisibility(View.VISIBLE);
-                    IvResultImage.setImageBitmap(item.getImageBitmap());
-                } else if (item.getImageUrl() != null && !item.getImageUrl().isEmpty()) {
-                    IvResultImage.setVisibility(View.VISIBLE);
-                    loadImageFromUrl(item.getImageUrl(), null);
-                } else if (item.getLocalImageResId() != 0) {
-                    IvResultImage.setVisibility(View.VISIBLE);
-                    IvResultImage.setImageResource(item.getLocalImageResId());
-                }
-            }
-
-            if (item.getDisplayText() != null && !item.getDisplayText().isEmpty()) {
+            if (element != null) {
+                // Вызываем наш метод, который показывает картинку и описание
+                displayElementFromDb(element.nameEn);
+            } else {
                 TvResultContent.setVisibility(View.VISIBLE);
-                TvResultContent.setText(item.getDisplayText());
-                TvResultContent.setGravity(Gravity.CENTER);
+                TvResultContent.setText(item.displayText);
             }
-
-            if (item.getRawData() != null && Patterns.WEB_URL.matcher(item.getRawData()).matches()) {
-                TvResultLink.setVisibility(View.VISIBLE);
-                TvResultLink.setText(item.getRawData());
-                TvResultLink.setOnClickListener(v -> {
-                    Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(item.getRawData()));
-                    startActivity(browserIntent);
-                });
-            }
-
-            Toast.makeText(this, "Восстановлено из истории", Toast.LENGTH_SHORT).show();
-            scrollToBottom();
+        } else {
+            TvResultContent.setVisibility(View.VISIBLE);
+            TvResultContent.setText(item.displayText);
         }
-    }
 
+        Toast.makeText(this, "Восстановлено из истории", Toast.LENGTH_SHORT).show();
+        scrollToBottom();
+    }
+    // Очистка истории
     private void clearHistory() {
-        historyList.clear();
+        AppDatabase db = AppDatabase.getInstance(this);
+        // Очищаем таблицу (нужно добавить метод в DAO)
+        db.scanHistoryDao().deleteAll();
+
         updateHistoryDisplay();
         Toast.makeText(this, "История очищена", Toast.LENGTH_SHORT).show();
+    }
+
+    private void showLastScanDescription() {
+        if (currentDisplayedElement != null) {
+            // Если сейчас на экране что-то есть, показываем окно для него
+            showElementDialog(currentDisplayedElement);
+        } else {
+            // Если экран пуст, ищем последний элемент в истории
+            AppDatabase db = AppDatabase.getInstance(this);
+            List<ScanHistory> history = db.scanHistoryDao().getAllHistory();
+
+            if (history.isEmpty()) {
+                Toast.makeText(this, "Нет отсканированных данных", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            ScanHistory lastItem = history.get(0);
+            if (lastItem.elementId != null) {
+                Element element = db.elementDao().getElementById(lastItem.elementId);
+                if (element != null) {
+                    showElementDialog(element);
+                }
+            } else {
+                Toast.makeText(this, "Последнее сканирование не является химическим элементом", Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 
     private boolean isChemicalElement(String name) {
@@ -819,6 +573,7 @@ public class MainActivity extends AppCompatActivity {
     private void clearCurrentResult() {
         hideAllResultViews();
         TvResultTitle.setVisibility(View.GONE);
+        currentDisplayedElement = null;
     }
 
     private void scrollToBottom() {
@@ -826,7 +581,7 @@ public class MainActivity extends AppCompatActivity {
             scrollView.post(() -> scrollView.fullScroll(ScrollView.FOCUS_DOWN));
         }
     }
-    private void showDescriptionDialog(ScanHistoryItem item) {
+    /*private void showDescriptionDialog(ScanHistoryItem item) {
         try {
             Log.d("QR_DEBUG", "=== showDescriptionDialog (долгое нажатие) ===");
             Log.d("QR_DEBUG", "Тип: " + item.getDataType());
@@ -905,102 +660,7 @@ public class MainActivity extends AppCompatActivity {
             e.printStackTrace();
             Toast.makeText(this, "Ошибка при открытии диалога", Toast.LENGTH_SHORT).show();
         }
-    }
-    private void showLastScanDescription() {
-            Log.d("QR_DEBUG", "=== showLastScanDescription ВЫЗВАН ===");
-
-            if (historyList.isEmpty()) {
-                Log.d("QR_DEBUG", "История пуста");
-                Toast.makeText(this, "Нет отсканированных данных", Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            ScanHistoryItem lastItem = historyList.get(0);
-            String rawData = lastItem.getRawData();
-            String dataType = lastItem.getDataType();
-
-            Log.d("QR_DEBUG", "Последний элемент: тип=" + dataType);
-            Log.d("QR_DEBUG", "Сырые данные: " + rawData);
-
-        // ========== 1. Обработка local:// формата ==========
-        if (rawData != null && rawData.startsWith(LOCAL_PREFIX)) {
-            String withoutPrefix = rawData.substring(LOCAL_PREFIX.length());
-            String imageName = withoutPrefix;
-            String description = null;
-
-            if (withoutPrefix.contains("|")) {
-                String[] parts = withoutPrefix.split("\\|", 2);
-                imageName = parts[0].trim();
-                description = parts[1].trim();
-            }
-
-            // Проверяем, является ли имя файла химическим элементом
-            String possibleElement = imageName.replace(".png", "").replace(".jpg", "").toLowerCase();
-            if (isChemicalElement(possibleElement)) {
-                String symbol = getChemicalSymbolFromName(possibleElement);
-                if (symbol != null) {
-                    ChemicalData.ChemicalElement element = ChemicalData.getElement(symbol);
-                    if (element != null) {
-                        Log.d("QR_DEBUG", "Найден элемент из имени файла: " + element.getName());
-                        showElementDialog(element);
-                        return;
-                    }
-                }
-            }
-
-            // Проверяем, является ли описание химическим элементом
-            if (description != null && isChemicalElement(description)) {
-                String symbol = getChemicalSymbolFromName(description);
-                if (symbol != null) {
-                    ChemicalData.ChemicalElement element = ChemicalData.getElement(symbol);
-                    if (element != null) {
-                        Log.d("QR_DEBUG", "Найден элемент из описания: " + element.getName());
-                        showElementDialog(element);
-                        return;
-                    }
-                }
-            }
-
-            // Если не химический элемент — показываем обычный диалог
-            String textToShow = (description != null) ? description : imageName;
-            showSimpleDescriptionDialog(textToShow, dataType, lastItem.getTimestamp());
-            return;
-        }
-
-            // Проверяем формат "URL|Описание"
-            if (rawData != null && rawData.contains("|")) {
-                String[] parts = rawData.split("\\|", 2);
-                String description = parts[1].trim();
-
-                Log.d("QR_DEBUG", "Описание из QR-кода: " + description);
-
-                // Проверяем, является ли описание химическим элементом
-                if (isChemicalElement(description)) {
-                    Log.d("QR_DEBUG", "Это химический элемент!");
-                    String symbol = getChemicalSymbolFromName(description);
-                    Log.d("QR_DEBUG", "Символ: " + symbol);
-
-                    if (symbol != null) {
-                        ChemicalData.ChemicalElement element = ChemicalData.getElement(symbol);
-                        if (element != null) {
-                            Log.d("QR_DEBUG", "Найден элемент: " + element.getName());
-                            showElementDialog(element);
-                            return;
-                        } else {
-                            Log.e("QR_DEBUG", "Элемент не найден для символа: " + symbol);
-                        }
-                    }
-                } else {
-                    Log.d("QR_DEBUG", "Не химический элемент, показываем обычный диалог");
-                    showSimpleDescriptionDialog(description, dataType, lastItem.getTimestamp());
-                    return;
-                }
-            }
-
-            // Если не подошло ни под один вариант
-            Log.d("QR_DEBUG", "Не удалось определить описание");
-            Toast.makeText(this, "Нет описания для этого элемента", Toast.LENGTH_SHORT).show();
-        }
+    }*/
     private void showSimpleDescriptionDialog(String text, String type, String time) {
         try {
             AlertDialog.Builder builder = new AlertDialog.Builder(this);
@@ -1033,7 +693,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
     // Получить список химических элементов из истории
-    private List<ChemicalData.ChemicalElement> getChemicalElementsFromHistory() {
+    /*private List<ChemicalData.ChemicalElement> getChemicalElementsFromHistory() {
         List<ChemicalData.ChemicalElement> elements = new ArrayList<>();
 
         Log.d("REACT_DEBUG", "=== Начало сбора элементов из истории ===");
@@ -1101,19 +761,19 @@ public class MainActivity extends AppCompatActivity {
 
         Log.d("REACT_DEBUG", "Итого собрано элементов: " + elements.size());
         return elements;
-    }
+    }*/
 
 
     // Проверка, есть ли уже элемент в списке
-    private boolean containsElement(List<ChemicalData.ChemicalElement> list, ChemicalData.ChemicalElement element) {
+    /*private boolean containsElement(List<ChemicalData.ChemicalElement> list, ChemicalData.ChemicalElement element) {
         for (ChemicalData.ChemicalElement e : list) {
             if (e.getSymbol().equals(element.getSymbol())) {
                 return true;
             }
         }
         return false;
-    }
-    private void showCombineElementDialog(){
+    }*/
+    /*private void showCombineElementDialog(){
         List<ChemicalData.ChemicalElement> elements = getChemicalElementsFromHistory();
         if(elements.size() < 2){
             Toast.makeText(this, "Нужно отсканировать минимум 2 химических элемента", Toast.LENGTH_LONG).show();
@@ -1135,8 +795,8 @@ public class MainActivity extends AppCompatActivity {
         });
         builder.setCancelable(true);
         builder.show();
-    }
-    private void showSecondElementDialog(ChemicalData.ChemicalElement first, List<ChemicalData.ChemicalElement> elements, String[] elementsNames){
+    }*/
+    /*private void showSecondElementDialog(ChemicalData.ChemicalElement first, List<ChemicalData.ChemicalElement> elements, String[] elementsNames){
         //диалог выбора 2 элемента
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("Выберите второй элемент (для реакции с " + first.getName() + ")");
@@ -1151,8 +811,8 @@ public class MainActivity extends AppCompatActivity {
         });
         builder.setCancelable(true);
         builder.show();
-    }
-    private void showReactionResult(ChemicalData.ChemicalElement first,
+    }*/
+    /*private void showReactionResult(ChemicalData.ChemicalElement first,
                                     ChemicalData.ChemicalElement second) {
         ChemicalReactions.Reaction reaction = ChemicalReactions.getReaction(
                 first.getSymbol(), second.getSymbol());
@@ -1198,5 +858,5 @@ public class MainActivity extends AppCompatActivity {
 
         closeButton.setOnClickListener(v -> dialog.dismiss());
         dialog.show();
-    }
+    }*/
 }
