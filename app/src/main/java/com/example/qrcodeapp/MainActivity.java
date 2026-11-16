@@ -13,6 +13,7 @@ import android.util.Patterns;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.webkit.WebView;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -84,7 +85,7 @@ public class MainActivity extends AppCompatActivity {
             }
 
             // 3. Показываем картинку
-            List<Media> media = db.mediaDao().getImagesForElement(element.id);
+            List<Media> media = db.mediaDao().getMediaForElement(element.id);
             if (!media.isEmpty()) {
                 int resId = getResources().getIdentifier(media.get(0).filePath, "drawable", getPackageName());
                 if (resId != 0) {
@@ -203,20 +204,21 @@ public class MainActivity extends AppCompatActivity {
             AlertDialog dialog = builder.create();
             dialog.setCancelable(true);
 
+            // 1. Находим элементы интерфейса
             TextView titleView = dialogView.findViewById(R.id.dialog_title);
             TextView typeView = dialogView.findViewById(R.id.dialog_type);
             TextView timeView = dialogView.findViewById(R.id.dialog_time);
             TextView descriptionView = dialogView.findViewById(R.id.dialog_description);
             Button closeButton = dialogView.findViewById(R.id.dialog_close);
+            WebView webView = dialogView.findViewById(R.id.webViewModel);
 
-            // Получаем категорию из БД
+            // 2. Заполняем текстовые поля
             String categoryName = "Неизвестно";
             if (element.categoryId != null) {
                 Categories cat = db.categoryDao().getCategoryById(element.categoryId);
                 if (cat != null) categoryName = cat.nameCategories;
             }
 
-            // Заполняем поля окна
             titleView.setText("Химический элемент:\n" + element.nameRu);
             typeView.setText("Символ: " + element.symbol + " | Атомный номер: " + element.atomicNumber);
             timeView.setText("Группа: " + categoryName);
@@ -225,12 +227,81 @@ public class MainActivity extends AppCompatActivity {
                     "ПРИМЕНЕНИЕ:\n" + element.uses;
             descriptionView.setText(fullDescription);
 
-            closeButton.setOnClickListener(v -> dialog.dismiss());
+            // 3. Ищем 3D-модель в БД
+            String modelFileName = null;
+            List<Media> allMedia = db.mediaDao().getMediaForElement(element.id);
+            for (Media m : allMedia) {
+                if ("model3d".equals(m.type)) {
+                    modelFileName = m.filePath + ".glb";
+                    break;
+                }
+            }
+
+            // 4. Настраиваем WebView и загружаем модель
+            if (modelFileName != null && !modelFileName.isEmpty()) {
+                webView.setVisibility(View.VISIBLE);
+                webView.getSettings().setJavaScriptEnabled(true);
+
+                // Логи для проверки
+                webView.setWebChromeClient(new android.webkit.WebChromeClient() {
+                    @Override
+                    public boolean onConsoleMessage(android.webkit.ConsoleMessage consoleMessage) {
+                        android.util.Log.d("WEBVIEW_3D", consoleMessage.message());
+                        return true;
+                    }
+                });
+
+                // Создаем загрузчик для assets
+                final androidx.webkit.WebViewAssetLoader assetLoader = new androidx.webkit.WebViewAssetLoader.Builder()
+                        .addPathHandler("/assets/", new androidx.webkit.WebViewAssetLoader.AssetsPathHandler(this))
+                        .build();
+
+                webView.setWebViewClient(new android.webkit.WebViewClient() {
+                    @Override
+                    public android.webkit.WebResourceResponse shouldInterceptRequest(android.webkit.WebView view, android.webkit.WebResourceRequest request) {
+                        return assetLoader.shouldInterceptRequest(request.getUrl());
+                    }
+                });
+
+                // Формируем HTML
+                String htmlData = "<html><head>" +
+                        "<script type='module' src='https://appassets.androidplatform.net/assets/model-viewer.min.js'></script>" +
+                        "</head><body style='margin:0; padding:0;'>" +
+                        "<model-viewer id='mv' src='https://appassets.androidplatform.net/assets/" + modelFileName + "' " +
+                        "auto-rotate camera-controls style='width:100%; height:100%; background-color: #ffffff;'></model-viewer>" +
+                        "<script>" +
+                        "  const mv = document.getElementById('mv');" +
+                        "  mv.addEventListener('load', () => console.log('MODEL_LOADED_SUCCESS'));" +
+                        "  mv.addEventListener('error', (e) => console.log('MODEL_LOAD_ERROR: ' + e.detail));" +
+                        "</script>" +
+                        "</body></html>";
+
+                // ГЛАВНОЕ ИЗМЕНЕНИЕ ЗДЕСЬ: передаем базовый URL вместо null
+                webView.loadDataWithBaseURL(
+                        "https://appassets.androidplatform.net/assets/",
+                        htmlData,
+                        "text/html",
+                        "UTF-8",
+                        null
+                );
+
+            } else {
+                webView.setVisibility(View.GONE);
+            }
+
+            // 5. Кнопка закрытия
+            closeButton.setOnClickListener(v -> {
+                if (webView != null) {
+                    webView.destroy();
+                }
+                dialog.dismiss();
+            });
+
             dialog.show();
 
         } catch (Exception e) {
             e.printStackTrace();
-            Toast.makeText(this, "Ошибка при открытии диалога", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Ошибка при открытии диалога: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -342,7 +413,7 @@ public class MainActivity extends AppCompatActivity {
 
             // Если есть ID элемента, показываем картинку
             if (item.elementId != null) {
-                List<Media> media = db.mediaDao().getImagesForElement(item.elementId);
+                List<Media> media = db.mediaDao().getMediaForElement(item.elementId);
                 if (!media.isEmpty()) {
                     int resId = getResources().getIdentifier(media.get(0).filePath, "drawable", getPackageName());
                     if (resId != 0) {

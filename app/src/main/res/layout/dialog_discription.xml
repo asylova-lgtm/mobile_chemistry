@@ -4,87 +4,87 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content">
 
-    <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    <!-- Убрали жесткие 600dp, поставили wrap_content -->
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="600dp"
+        android:layout_height="wrap_content"
         android:orientation="vertical"
         android:padding="20dp"
-        android:background="@drawable/semi_transparent_border">
-
-    <TextView
-        android:id="@+id/dialog_title"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        tools:layout_editor_absoluteX="20dp"
-        tools:layout_editor_absoluteY="20dp"
-        tools:text="@string/TV_dialog_zagolovok"
-        android:textSize="22sp"
-        android:textStyle="bold"
-        android:textColor="@color/black"
-        android:gravity="center"
-        android:layout_marginBottom="16dp"/>
-
-    <TextView
-        android:id="@+id/dialog_type"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:textSize="14sp"
-        android:textColor="@color/black"
-        android:gravity="center"
-        android:layout_marginBottom="8dp"/>
-
-    <TextView
-        android:id="@+id/dialog_time"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:textSize="12sp"
-        android:textColor="@color/black"
-        android:gravity="center"
-        android:layout_marginBottom="16dp"/>
-    <!-- Разделитель -->
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:background="#E0E0E0"
-        android:layout_marginBottom="16dp"/>
-
-    <!-- Текст описания (с прокруткой) -->
-    <ScrollView
-        android:layout_width="match_parent"
-        android:layout_height="350dp"
-        android:layout_marginBottom="16dp"
         android:background="@drawable/semi_transparent_border"
-        android:padding="12dp">
+        tools:ignore="MissingConstraints,WebViewLayout">
 
         <TextView
-            android:id="@+id/dialog_description"
+            android:id="@+id/dialog_title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textSize="16sp"
+            tools:text="@string/TV_dialog_zagolovok"
+            android:textSize="22sp"
+            android:textStyle="bold"
             android:textColor="@color/black"
-            android:lineSpacingMultiplier="1.2"/>
-    </ScrollView>
+            android:gravity="center"
+            android:layout_marginBottom="16dp"/>
 
-    <!-- Ссылка (если есть) -->
-    <TextView
-        android:id="@+id/dialog_link"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:textSize="14sp"
-        android:textColor="@color/design_default_color_primary"
-        android:gravity="center"
-        android:visibility="gone"
-        android:layout_marginBottom="16dp"/>
+        <TextView
+            android:id="@+id/dialog_type"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="14sp"
+            android:textColor="@color/black"
+            android:gravity="center"
+            android:layout_marginBottom="8dp"/>
 
-    <!-- Кнопка "На главный экран" -->
-    <Button
-        android:id="@+id/dialog_close"
-        android:layout_width="200dp"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center_horizontal"
-        android:text="На главный экран"
-        android:backgroundTint="#2196F3"
-        android:textColor="@color/white"
-        android:textSize="16sp"/>
+        <TextView
+            android:id="@+id/dialog_time"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textColor="@color/black"
+            android:gravity="center"
+            android:layout_marginBottom="16dp"/>
+
+        <!-- Разделитель -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#E0E0E0"
+            android:layout_marginBottom="16dp"/>
+
+        <!-- Уменьшили высоту текста до 150dp, чтобы модель поместилась -->
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="150dp"
+            android:layout_marginBottom="16dp"
+            android:background="@drawable/semi_transparent_border"
+            android:padding="12dp">
+
+            <TextView
+                android:id="@+id/dialog_description"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="16sp"
+                android:textColor="@color/black"
+                android:lineSpacingMultiplier="1.2"/>
+        </ScrollView>
+
+        <!-- Наша 3D-модель -->
+        <WebView
+            android:id="@+id/webViewModel"
+            android:layout_width="match_parent"
+            android:layout_height="200dp"
+            android:layout_marginBottom="16dp"
+            android:background="#F0F0F0"
+            android:visibility="gone" />
+
+        <!-- Кнопка "На главный экран" -->
+        <Button
+            android:id="@+id/dialog_close"
+            android:layout_width="200dp"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:text="На главный экран"
+            android:backgroundTint="#2196F3"
+            android:textColor="@color/white"
+            android:textSize="16sp"/>
+
     </LinearLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>

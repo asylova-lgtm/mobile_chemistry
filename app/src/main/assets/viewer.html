@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <script type="module" src="https://appassets.androidplatform.net/assets/model-viewer.min.js"></script>
+</head>
+<body style="margin:0; padding:0;">
+<model-viewer id="mv"
+              src="https://appassets.androidplatform.net/assets/MODEL_FILE_NAME"
+              auto-rotate camera-controls
+              style="width:100%; height:100%; background-color: #f0f0f0;">
+</model-viewer>
+<script>
+    const mv = document.getElementById('mv');
+    mv.addEventListener('load', () => console.log('MODEL_LOADED_SUCCESS'));
+    mv.addEventListener('error', (e) => console.log('MODEL_LOAD_ERROR: ' + e.detail));
+</script>
+</body>
+</html>

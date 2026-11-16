@@ -11,6 +11,8 @@ public interface MediaDao {
     @Insert
     void insert(Media media);
 
-    @Query("SELECT * FROM media WHERE elementId = :elId AND type = 'image'")
-    List<Media> getImagesForElement(int elId);
+    @Query("SELECT * FROM media WHERE elementId = :elId")
+    List<Media> getMediaForElement(int elId);
+
+
 }

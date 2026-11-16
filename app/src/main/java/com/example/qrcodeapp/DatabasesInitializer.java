@@ -81,6 +81,12 @@ public class DatabasesInitializer {
         imgIron.elementId = ironId; imgIron.type = "image"; imgIron.filePath = "iron";
         mediaDao.insert(imgIron);
 
+        Media modelGold = new Media();
+        modelGold.elementId = goldId;
+        modelGold.type = "model3d";
+        modelGold.filePath = "test_model";
+        mediaDao.insert(modelGold);
+
 
         ScanHistory history = new ScanHistory();
         history.elementId = goldId; history.scannedDate = Math.toIntExact(System.currentTimeMillis());
