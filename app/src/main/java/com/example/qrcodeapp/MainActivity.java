@@ -36,13 +36,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
-    //private static final String LOCAL_PREFIX = "local://"; //попытка локального хранения данных в qr-коде
     // UI элементы
     private Button btnScan, btnClear, btnClearHistory, btnShowDescription, btn_combine_elements;
     private TextView TvResultTitle, TvResultType, TvResultContent, TvResultLink;
     private ImageView IvResultImage;
     private LinearLayout historyContainer;
     private ScrollView scrollView;
+    private  TextView tvHistoryToggle;
     private Element currentDisplayedElement = null;
 
     // История сканирований
@@ -79,9 +79,9 @@ public class MainActivity extends AppCompatActivity {
             // 2. Устанавливаем тип (категорию)
             if (element.categoryId != null) {
                 Categories cat = db.categoryDao().getCategoryById(element.categoryId);
-                if (cat != null) {
+                /*if (cat != null) {
                     TvResultType.setText("Тип: Химический элемент (" + cat.nameCategories + ")");
-                }
+                }*/
             }
 
             // 3. Показываем картинку
@@ -108,6 +108,7 @@ public class MainActivity extends AppCompatActivity {
         IvResultImage = findViewById(R.id.iv_result_image);
         historyContainer = findViewById(R.id.history_container);
         scrollView = findViewById(R.id.scroll_view);
+        tvHistoryToggle = findViewById(R.id.tv_history_toggle);
         btnShowDescription = findViewById(R.id.btn_show_description);
         btn_combine_elements = findViewById(R.id.btn_combine_elements);
     }
@@ -120,6 +121,15 @@ public class MainActivity extends AppCompatActivity {
             btnShowDescription.setOnClickListener(v -> showLastScanDescription());
         }
         btn_combine_elements.setOnClickListener(v -> showCombineElementDialog());
+        tvHistoryToggle.setOnClickListener(v -> {
+            if (historyContainer.getVisibility() == View.VISIBLE) {
+                historyContainer.setVisibility(View.GONE);
+                tvHistoryToggle.setText("История сканирования ▼");
+            } else {
+                historyContainer.setVisibility(View.VISIBLE);
+                tvHistoryToggle.setText("История сканирования ▲");
+            }
+        });
     }
 
     private void startQRScanner() {
@@ -190,7 +200,6 @@ public class MainActivity extends AppCompatActivity {
             db.scanHistoryDao().insert(history);
         }
         updateHistoryDisplay();
-        scrollToBottom();
     }
 
     private void showElementDialog(Element element) {
@@ -471,6 +480,14 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
+        if (historyList.isEmpty()) {
+            tvHistoryToggle.setVisibility(View.GONE);
+            historyContainer.setVisibility(View.GONE);
+            return;
+        } else {
+            tvHistoryToggle.setVisibility(View.VISIBLE);
+        }
+
         for (int i = 0; i < historyList.size(); i++) {
             ScanHistory item = historyList.get(i);
             View historyItemView = getLayoutInflater().inflate(R.layout.history_item, historyContainer, false);
@@ -543,7 +560,6 @@ public class MainActivity extends AppCompatActivity {
         }
 
         Toast.makeText(this, "Восстановлено из истории", Toast.LENGTH_SHORT).show();
-        scrollToBottom();
     }
     // Очистка истории
     private void clearHistory() {
@@ -725,12 +741,6 @@ public class MainActivity extends AppCompatActivity {
         hideAllResultViews();
         TvResultTitle.setVisibility(View.GONE);
         currentDisplayedElement = null;
-    }
-
-    private void scrollToBottom() {
-        if (scrollView != null) {
-            scrollView.post(() -> scrollView.fullScroll(ScrollView.FOCUS_DOWN));
-        }
     }
     private void showSimpleDescriptionDialog(String text, String type, String time) {
         try {

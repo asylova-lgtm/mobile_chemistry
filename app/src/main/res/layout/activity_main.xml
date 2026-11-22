@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/scroll_view"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -12,28 +13,26 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:layout_marginTop="80dp"
-        android:layout_marginLeft="10dp"
-        android:layout_marginRight="10dp"
-        android:background="@color/white">
+        android:paddingLeft="16dp"
+        android:paddingRight="16dp"
+        android:paddingBottom="16dp"
+        android:paddingTop="80dp">
 
-        <!-- Карточка для отображения текущего результата -->
+        <!-- ================= КАРТОЧКА РЕЗУЛЬТАТА ================= -->
         <androidx.cardview.widget.CardView
-            android:id="@+id/current_result_card"
+            android:id="@+id/current_result_container"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
+            android:layout_marginTop="10dp"
             app:cardCornerRadius="8dp"
             app:cardElevation="4dp">
 
             <LinearLayout
-                android:id="@+id/current_result_container"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="@color/purple"
+                android:background="#2196F3"
                 android:orientation="vertical"
-                android:padding="16dp"
-                android:backgroundTint="#2196F3">
+                android:padding="16dp">
 
                 <TextView
                     android:id="@+id/tv_result_title"
@@ -43,9 +42,9 @@
                     android:textColor="@color/black"
                     android:textSize="18sp"
                     android:textStyle="bold"
-                    android:gravity="center" />
+                    android:gravity="center"
+                    android:visibility="gone" />
 
-                <!-- Тип данных -->
                 <TextView
                     android:id="@+id/tv_result_type"
                     android:layout_width="match_parent"
@@ -53,10 +52,10 @@
                     android:layout_marginTop="8dp"
                     android:textSize="14sp"
                     android:textStyle="italic"
+                    android:textColor="@color/black"
                     android:gravity="center"
                     android:visibility="gone" />
 
-                <!-- Для текста -->
                 <TextView
                     android:id="@+id/tv_result_content"
                     android:layout_width="match_parent"
@@ -65,51 +64,47 @@
                     android:textColor="@color/black"
                     android:textSize="20sp"
                     android:gravity="center"
-                    android:textAlignment="center"
                     android:visibility="gone" />
 
-                <!-- Для ссылок -->
                 <TextView
                     android:id="@+id/tv_result_link"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:textColor="@color/design_default_color_primary"
+                    android:textColor="@color/black"
                     android:textSize="16sp"
                     android:gravity="center"
-                    android:textAlignment="center"
                     android:visibility="gone" />
 
-                <!-- Для изображений -->
                 <ImageView
                     android:id="@+id/iv_result_image"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:scaleType="fitCenter"
+                    android:layout_marginTop="8dp"
                     android:adjustViewBounds="true"
+                    android:maxHeight="300dp"
+                    android:scaleType="fitCenter"
                     android:visibility="gone" />
 
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- Кнопки -->
+        <!-- ================= КНОПКИ УПРАВЛЕНИЯ ================= -->
         <Button
             android:id="@+id/btn_scan"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
             android:layout_marginTop="20dp"
-            android:backgroundTint="#2196F3"
-            android:text="@string/btn_scan" />
+            android:text="Сканировать QR-код" />
 
         <Button
             android:id="@+id/btn_clear"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
-            android:layout_marginTop="20dp"
-            android:backgroundTint="#2196F3"
-            android:text="@string/btn_clear" />
+            android:layout_marginTop="10dp"
+            android:text="Очистить экран" />
 
         <Button
             android:id="@+id/btn_clear_history"
@@ -118,7 +113,7 @@
             android:layout_gravity="center_horizontal"
             android:layout_marginTop="10dp"
             android:backgroundTint="#FF4444"
-            android:text="@string/btn_clear_history" />
+            android:text="Очистить историю" />
 
         <Button
             android:id="@+id/btn_show_description"
@@ -126,8 +121,7 @@
             android:layout_height="wrap_content"
             android:layout_gravity="center_horizontal"
             android:layout_marginTop="10dp"
-            android:backgroundTint="#2196F3"
-            android:text="@string/btn_show_description" />
+            android:text="Показать описание" />
 
         <Button
             android:id="@+id/btn_combine_elements"
@@ -136,37 +130,45 @@
             android:layout_gravity="center_horizontal"
             android:layout_marginTop="10dp"
             android:backgroundTint="#4CAF50"
-            android:text="@string/btn_combine_elements" />
+            android:text="Собрать уравнение" />
 
-        <!-- Разделитель и заголовок истории -->
+        <!-- ================= ИСТОРИЯ (ВЫПАДАЮЩИЙ СПИСОК) ================= -->
+
+        <!-- Разделитель -->
         <View
             android:layout_width="match_parent"
-            android:layout_height="2dp"
-            android:background="#CCCCCC"
-            android:layout_marginTop="30dp"/>
+            android:layout_height="1dp"
+            android:layout_marginTop="30dp"
+            android:background="#CCCCCC" />
 
+        <!-- Заголовок-кнопка для открытия истории -->
         <TextView
+            android:id="@+id/tv_history_toggle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="История сканирований"
-            android:textSize="22sp"
-            android:textStyle="bold"
+            android:layout_marginTop="10dp"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
             android:gravity="center"
-            android:layout_marginTop="20dp"
-            android:layout_marginBottom="10dp"/>
+            android:padding="16dp"
+            android:text="История сканирования ▼"
+            android:textColor="@color/black"
+            android:textSize="18sp"
+            android:textStyle="bold" />
 
-        <!-- Контейнер для истории -->
+        <!-- Сам контейнер с историей (скрыт по умолчанию) -->
         <LinearLayout
             android:id="@+id/history_container"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:paddingBottom="20dp"/>
+            android:visibility="gone" />
 
-        <!-- Пустое пространство -->
+        <!-- Отступ снизу -->
         <Space
             android:layout_width="match_parent"
-            android:layout_height="50dp"/>
+            android:layout_height="50dp" />
 
     </LinearLayout>
 </ScrollView>
