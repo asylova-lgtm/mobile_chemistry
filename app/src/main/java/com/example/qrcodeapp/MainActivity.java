@@ -119,7 +119,7 @@ public class MainActivity extends AppCompatActivity {
         if (btnShowDescription != null) {
             btnShowDescription.setOnClickListener(v -> showLastScanDescription());
         }
-        //btn_combine_elements.setOnClickListener(v -> showCombineElementDialog());
+        btn_combine_elements.setOnClickListener(v -> showCombineElementDialog());
     }
 
     private void startQRScanner() {
@@ -305,39 +305,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /*private boolean loadLocalImage(String imageName){
-        try{
-            String resourceName = imageName;
-            if(resourceName.contains(".")){
-                resourceName = resourceName.substring(0, resourceName.lastIndexOf("."));
-            }
-            int resourceId = getResources().getIdentifier(resourceName, "drawable", getPackageName());
-
-            if (resourceId!=0){
-                //если найдена - показать
-                IvResultImage.setVisibility(View.VISIBLE);
-                IvResultImage.setImageResource(resourceId);
-                return true;
-            } else{
-                Toast.makeText(this, "Изображение не найдено: " + imageName, Toast.LENGTH_SHORT).show();
-                return false;
-            }
-        } catch (Exception e){
-            e.printStackTrace();
-            Toast.makeText(this, "Ошибка загрузки: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-            return false;
-        }
-    }*/
-
-    /*private String[] parseLocalImageData(String data){
-        String withoutPrefix = data.substring(LOCAL_PREFIX.length());
-        if (withoutPrefix.contains("|")){
-            String[] parts = withoutPrefix.split("\\|", 2);
-            return new String[] { parts[0].trim(), parts[1].trim() };
-        } else {
-            return new String[] { withoutPrefix.trim(), null };
-        }
-    }*/
     private void loadImageFromUrl(String imageUrl, ImageLoadCallback callback) {
         if (IvResultImage == null) return;
 
@@ -370,10 +337,123 @@ public class MainActivity extends AppCompatActivity {
                 });
     }
 
-    // ================ МЕТОДЫ ДЛЯ РАБОТЫ С ИСТОРИЕЙ ================
-
     // ================ РАБОТА С ИСТОРИЕЙ ИЗ БД ================
 
+    private List<Element> getScannedElementsFromDb(){
+        List<Element> uniqueElements = new ArrayList<>();
+        AppDatabase db = AppDatabase.getInstance(this);
+        List<ScanHistory> history = db.scanHistoryDao().getAllHistory();
+
+        for (ScanHistory h : history) {
+            if (h.elementId != null) {
+                Element el = db.elementDao().getElementById(h.elementId);
+                if (el != null) {
+                    //нет ли такого элемента в списке
+                    boolean exists = false;
+                    for (Element e : uniqueElements) {
+                        if (e.id == el.id) {
+                            exists = true;
+                            break;
+                        }
+                    }
+                    if (!exists) uniqueElements.add(el);
+                }
+            }
+        }
+        return  uniqueElements;
+    }
+
+    private void showCombineElementDialog() {
+        List<Element> elements = getScannedElementsFromDb();
+
+        if (elements.size() < 2) {
+            Toast.makeText(this, "Для реакции необходимо минимум 2 химических элемента", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        String[] names = new String[elements.size()];
+        for (int i = 0; i < elements.size(); i++) {
+            names[i] = elements.get(i).nameRu;
+        }
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Выберите первый элемент");
+        builder.setItems(names, ((dialog, which) -> {
+            Element first = elements.get(which);
+            showSecondElementDialog(first, elements, names);
+        }));
+        builder.show();
+    }
+
+    private void showSecondElementDialog(Element first, List<Element> elements, String[] names) {
+        Log.d("REACTION_TEST", "Выбран первый элемент: " + first.nameRu);
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Выберите второй элемент для реакции с " + first.symbol);
+        builder.setItems(names, ((dialog, which) -> {
+            Element second = elements.get(which);
+            if(first.id == second.id) {
+                Toast.makeText(this, "Выберите другой элемент!", Toast.LENGTH_LONG).show();
+                return;
+            }
+            checkReactionInDb(first, second);
+        }));
+        builder.show();
+    }
+
+    private void checkReactionInDb(Element first, Element second) {
+        AppDatabase db = AppDatabase.getInstance(this);
+        Reaction reaction = null;
+
+        reaction = db.reactionDao().getReaction(first.id, second.nameRu);
+        if (reaction == null) {
+            reaction = db.reactionDao().getReaction(second.id, first.nameRu);
+        }
+        showReactionResultDialog(first, second, reaction);
+    }
+
+    private void showReactionResultDialog(Element first, Element second, Reaction reaction) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        View dialogView = getLayoutInflater().inflate(R.layout.dialog_discription, null);
+        builder.setView(dialogView);
+
+        AlertDialog dialog = builder.create();
+        dialog.setCancelable(true);
+
+        TextView titleView = dialogView.findViewById(R.id.dialog_title);
+        TextView typeView = dialogView.findViewById(R.id.dialog_type);
+        TextView timeView = dialogView.findViewById(R.id.dialog_time);
+        TextView descriptionView = dialogView.findViewById(R.id.dialog_description);
+        Button closeButton = dialogView.findViewById(R.id.dialog_close);
+
+        // Скрываем WebView, так как для реакций 3D-модель не нужна
+        WebView webView = dialogView.findViewById(R.id.webViewModel);
+        if (webView != null) webView.setVisibility(View.GONE);
+
+        titleView.setText("⚗️ Химическая реакция ⚗️");
+
+        if (reaction != null) {
+            typeView.setText(first.nameRu + " + " + second.nameRu);
+            timeView.setText("Условия: " + reaction.conditions);
+
+            String fullInfo = "УРАВНЕНИЕ:\n" + reaction.equation +
+                    "\n\n═══════════════════════════\n" +
+                    "ПРОДУКТЫ:\n" + reaction.products +
+                    "\n\n═══════════════════════════\n" +
+                    "ОПИСАНИЕ:\n" + reaction.descriptionReaction;
+            descriptionView.setText(fullInfo);
+        } else {
+            typeView.setText(first.nameRu + " + " + second.nameRu);
+            timeView.setText("Реакция не зарегистрирована");
+
+            String fullInfo = "В базе данных нет информации о реакции между\n" +
+                    first.nameRu + " и " + second.nameRu + ".\n\n" +
+                    "Возможно, эти элементы не реагируют друг с другом.";
+            descriptionView.setText(fullInfo);
+        }
+
+        closeButton.setOnClickListener(v -> dialog.dismiss());
+        dialog.show();
+    }
     private void updateHistoryDisplay() {
         historyContainer.removeAllViews();
         AppDatabase db = AppDatabase.getInstance(this);
@@ -652,86 +732,6 @@ public class MainActivity extends AppCompatActivity {
             scrollView.post(() -> scrollView.fullScroll(ScrollView.FOCUS_DOWN));
         }
     }
-    /*private void showDescriptionDialog(ScanHistoryItem item) {
-        try {
-            Log.d("QR_DEBUG", "=== showDescriptionDialog (долгое нажатие) ===");
-            Log.d("QR_DEBUG", "Тип: " + item.getDataType());
-            Log.d("QR_DEBUG", "RawData: " + item.getRawData());
-
-            String rawData = item.getRawData();
-
-            // ========== 1. Обработка local:// формата ==========
-            if (rawData != null && rawData.startsWith(LOCAL_PREFIX)) {
-                String withoutPrefix = rawData.substring(LOCAL_PREFIX.length());
-                String imageName = withoutPrefix;
-                String description = null;
-
-                if (withoutPrefix.contains("|")) {
-                    String[] parts = withoutPrefix.split("\\|", 2);
-                    imageName = parts[0].trim();
-                    description = parts[1].trim();
-                }
-
-                // Проверяем, является ли имя файла химическим элементом
-                String possibleElement = imageName.replace(".png", "").replace(".jpg", "").toLowerCase();
-                if (isChemicalElement(possibleElement)) {
-                    String symbol = getChemicalSymbolFromName(possibleElement);
-                    if (symbol != null) {
-                        ChemicalData.ChemicalElement element = ChemicalData.getElement(symbol);
-                        if (element != null) {
-                            showElementDialog(element);
-                            return;
-                        }
-                    }
-                }
-
-                // Если описание было после |
-                if (description != null && isChemicalElement(description)) {
-                    String symbol = getChemicalSymbolFromName(description);
-                    if (symbol != null) {
-                        ChemicalData.ChemicalElement element = ChemicalData.getElement(symbol);
-                        if (element != null) {
-                            showElementDialog(element);
-                            return;
-                        }
-                    }
-                }
-
-                // Иначе — обычный диалог
-                String textToShow = (description != null) ? description : imageName;
-                showSimpleDescriptionDialog(textToShow, item.getDataType(), item.getTimestamp());
-                return;
-            }
-
-            // ========== 2. Обработка формата "URL|Описание" ==========
-            if (rawData != null && rawData.contains("|")) {
-                String[] parts = rawData.split("\\|", 2);
-                String description = parts[1].trim();
-
-                if (isChemicalElement(description)) {
-                    String symbol = getChemicalSymbolFromName(description);
-                    if (symbol != null) {
-                        ChemicalData.ChemicalElement element = ChemicalData.getElement(symbol);
-                        if (element != null) {
-                            showElementDialog(element);
-                            return;
-                        }
-                    }
-                } else {
-                    showSimpleDescriptionDialog(description, item.getDataType(), item.getTimestamp());
-                    return;
-                }
-            }
-
-            // ========== 3. Всё остальное ==========
-            showSimpleDescriptionDialog(item.getDisplayText(), item.getDataType(), item.getTimestamp());
-
-        } catch (Exception e) {
-            Log.e("QR_DEBUG", "Ошибка в showDescriptionDialog: " + e.getMessage());
-            e.printStackTrace();
-            Toast.makeText(this, "Ошибка при открытии диалога", Toast.LENGTH_SHORT).show();
-        }
-    }*/
     private void showSimpleDescriptionDialog(String text, String type, String time) {
         try {
             AlertDialog.Builder builder = new AlertDialog.Builder(this);
@@ -763,171 +763,4 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(this, "Ошибка при открытии диалога", Toast.LENGTH_SHORT).show();
         }
     }
-    // Получить список химических элементов из истории
-    /*private List<ChemicalData.ChemicalElement> getChemicalElementsFromHistory() {
-        List<ChemicalData.ChemicalElement> elements = new ArrayList<>();
-
-        Log.d("REACT_DEBUG", "=== Начало сбора элементов из истории ===");
-        Log.d("REACT_DEBUG", "Всего элементов в истории: " + historyList.size());
-
-        for (int i = 0; i < historyList.size(); i++) {
-            ScanHistoryItem item = historyList.get(i);
-            String dataType = item.getDataType();
-            String rawData = item.getRawData();
-            String displayText = item.getDisplayText();
-
-            Log.d("REACT_DEBUG", "Элемент " + i + ": тип=" + dataType + ", rawData=" + rawData + ", displayText=" + displayText);
-
-            // Проверяем, химический ли это элемент
-            if (dataType != null && dataType.contains("Химический")) {
-                Log.d("REACT_DEBUG", "  -> Это химический элемент!");
-
-                // Пытаемся извлечь название
-                String elementName = null;
-
-                // 1. Сначала пробуем взять из rawData, убрав local://
-                if (rawData != null) {
-                    String clean = rawData;
-                    if (clean.startsWith("local://")) {
-                        clean = clean.substring(8);
-                    }
-                    if (clean.contains(".png")) {
-                        clean = clean.substring(0, clean.indexOf(".png"));
-                    }
-                    if (clean.contains(".jpg")) {
-                        clean = clean.substring(0, clean.indexOf(".jpg"));
-                    }
-                    // Если clean не пустой и не похож на URL
-                    if (!clean.isEmpty() && !clean.startsWith("http")) {
-                        elementName = clean;
-                    }
-                }
-
-                // 2. Если не получили — пробуем displayText (русское название)
-                if (elementName == null && displayText != null) {
-                    elementName = displayText;
-                }
-
-                Log.d("REACT_DEBUG", "  -> elementName = " + elementName);
-
-                if (elementName != null) {
-                    // Пробуем получить символ
-                    String symbol = getChemicalSymbolFromName(elementName);
-                    if (symbol == null) {
-                        symbol = getChemicalSymbolFromName(elementName);
-                    }
-
-                    Log.d("REACT_DEBUG", "  -> symbol = " + symbol);
-
-                    if (symbol != null) {
-                        ChemicalData.ChemicalElement element = ChemicalData.getElement(symbol);
-                        if (element != null && !containsElement(elements, element)) {
-                            elements.add(element);
-                            Log.d("REACT_DEBUG", "  -> ДОБАВЛЕН: " + element.getName() + " (" + symbol + ")");
-                        }
-                    }
-                }
-            }
-        }
-
-        Log.d("REACT_DEBUG", "Итого собрано элементов: " + elements.size());
-        return elements;
-    }*/
-
-
-    // Проверка, есть ли уже элемент в списке
-    /*private boolean containsElement(List<ChemicalData.ChemicalElement> list, ChemicalData.ChemicalElement element) {
-        for (ChemicalData.ChemicalElement e : list) {
-            if (e.getSymbol().equals(element.getSymbol())) {
-                return true;
-            }
-        }
-        return false;
-    }*/
-    /*private void showCombineElementDialog(){
-        List<ChemicalData.ChemicalElement> elements = getChemicalElementsFromHistory();
-        if(elements.size() < 2){
-            Toast.makeText(this, "Нужно отсканировать минимум 2 химических элемента", Toast.LENGTH_LONG).show();
-            return;
-        }
-
-        String[] elementsNames = new String[elements.size()];
-        for (int i = 0; i < elements.size(); i++) {
-            ChemicalData.ChemicalElement e = elements.get(i);
-            elementsNames[i] = e.getName() + " (" + e.getSymbol() + ")";
-        }
-
-        //диалог выбора 1 элемента
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("Выберите первый элемент");
-        builder.setItems(elementsNames, (dialog, which) ->{
-            ChemicalData.ChemicalElement first = elements.get(which);
-            showSecondElementDialog(first, elements, elementsNames);
-        });
-        builder.setCancelable(true);
-        builder.show();
-    }*/
-    /*private void showSecondElementDialog(ChemicalData.ChemicalElement first, List<ChemicalData.ChemicalElement> elements, String[] elementsNames){
-        //диалог выбора 2 элемента
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("Выберите второй элемент (для реакции с " + first.getName() + ")");
-        builder.setItems(elementsNames, (dialog, which) ->{
-            ChemicalData.ChemicalElement second = elements.get(which);
-            if(first.getSymbol().equals(second.getSymbol())){
-                Toast.makeText(this, "Выберите другой элемент!", Toast.LENGTH_SHORT).show();
-                showSecondElementDialog(first, elements, elementsNames);
-                return;
-            }
-            showReactionResult(first, second);
-        });
-        builder.setCancelable(true);
-        builder.show();
-    }*/
-    /*private void showReactionResult(ChemicalData.ChemicalElement first,
-                                    ChemicalData.ChemicalElement second) {
-        ChemicalReactions.Reaction reaction = ChemicalReactions.getReaction(
-                first.getSymbol(), second.getSymbol());
-
-        // Создаем диалог с результатом
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        View dialogView = getLayoutInflater().inflate(R.layout.dialog_discription, null);
-        builder.setView(dialogView);
-
-        AlertDialog dialog = builder.create();
-        dialog.setCancelable(true);
-
-        TextView titleView = dialogView.findViewById(R.id.dialog_title);
-        TextView typeView = dialogView.findViewById(R.id.dialog_type);
-        TextView timeView = dialogView.findViewById(R.id.dialog_time);
-        TextView descriptionView = dialogView.findViewById(R.id.dialog_description);
-        Button closeButton = dialogView.findViewById(R.id.dialog_close);
-
-        titleView.setText("⚗️ Химическая реакция ⚗️");
-
-        if (reaction != null) {
-            typeView.setText("Реагенты: " + reaction.getReactants());
-            timeView.setText("Условия: " + reaction.getConditions());
-
-            String fullInfo = "Уравнение реакции:\n" + reaction.getEquation() +
-                    "\n\n═══════════════════════════\n" +
-                    "Продукты:\n" + reaction.getProducts() +
-                    "\n\n═══════════════════════════\n" +
-                    "Описание:\n" + reaction.getDescription();
-            descriptionView.setText(fullInfo);
-
-        } else {
-            typeView.setText(first.getName() + " + " + second.getName());
-            timeView.setText("Реакция не известна");
-
-            String fullInfo = "В базе данных пока нет информации о реакции между\n" +
-                    first.getName() + " (" + first.getSymbol() + ") и " +
-                    second.getName() + " (" + second.getSymbol() + ")\n\n" +
-                    "Возможно, эти элементы не реагируют друг с другом,\n" +
-                    "или требуются особые условия (температура, давление, катализатор).";
-            descriptionView.setText(fullInfo);
-        }
-
-        closeButton.setOnClickListener(v -> dialog.dismiss());
-        dialog.show();
-    }*/
 }

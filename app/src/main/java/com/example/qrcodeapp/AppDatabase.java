@@ -6,7 +6,7 @@ import androidx.room.Room;
 import androidx.room.RoomDatabase;
 
 @Database(entities = {Element.class, Media.class, Categories.class, Reaction.class, ScanHistory.class},
-        version = 8, exportSchema = false)
+        version = 14, exportSchema = false)
 public abstract class AppDatabase extends RoomDatabase {
     private  static  AppDatabase instance;
     public abstract ElementDao elementDao();

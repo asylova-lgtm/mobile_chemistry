@@ -9,6 +9,6 @@ import java.util.List;
 @Dao
 public interface ReactionDao {
     @Insert void insert(Reaction reaction);
-    @Query("select * from reactions where element1Id = :elID")
-    List<Reaction> getReactionsForElement(int elID);
+    @Query("SELECT * FROM reactions WHERE element1Id = :id1 AND element2Name = :name2 LIMIT 1")
+    Reaction getReaction(int id1, String name2);
 }
